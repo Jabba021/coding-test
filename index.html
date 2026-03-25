@@ -179,32 +179,6 @@
     .op-btn[data-op="×"].active  { background: linear-gradient(135deg, #f59e0b, #ef7c00); }
     .op-btn[data-op="÷"].active  { background: linear-gradient(135deg, #22c55e, #16a34a); }
 
-    /* Number-limit pills */
-    .limit-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 0.5rem;
-      margin-bottom: 1.8rem;
-    }
-    .limit-btn {
-      padding: 0.6rem 0.2rem;
-      font-family: inherit;
-      font-size: 1rem;
-      font-weight: 800;
-      border: 3px solid #e5e7eb;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: all 0.15s;
-      background: #f3f4f6;
-      color: #6b7280;
-    }
-    .limit-btn:hover { border-color: #a78bfa; color: #7c3aed; }
-    .limit-btn.active {
-      background: linear-gradient(135deg, #7c3aed, #4f46e5);
-      border-color: transparent;
-      color: #fff;
-      box-shadow: 0 4px 14px rgba(124,58,237,0.38);
-    }
 
     /* Play button */
     .play-btn {
@@ -572,22 +546,10 @@
 
         <div class="section-label">Difficulty</div>
         <div class="diff-grid">
-          <button class="diff-btn active" data-diff="easy">
-            🟢 Easy
-            <span class="diff-label">Addition only</span>
-          </button>
-          <button class="diff-btn" data-diff="medium">
-            🔵 Medium
-            <span class="diff-label">Add &amp; Subtract</span>
-          </button>
-          <button class="diff-btn" data-diff="hard">
-            🟠 Hard
-            <span class="diff-label">+ − ×</span>
-          </button>
-          <button class="diff-btn" data-diff="psychotic">
-            🔴 Psychotic
-            <span class="diff-label">+ − × ÷</span>
-          </button>
+          <button class="diff-btn active" data-diff="easy">🟢 Easy</button>
+          <button class="diff-btn" data-diff="medium">🔵 Medium</button>
+          <button class="diff-btn" data-diff="hard">🟠 Hard</button>
+          <button class="diff-btn" data-diff="psychotic">🔴 Psychotic</button>
         </div>
 
         <div class="section-label">Operations Included</div>
@@ -604,14 +566,6 @@
           <button class="op-btn" data-op="÷">
             <span class="op-symbol">÷</span>Division
           </button>
-        </div>
-
-        <div class="section-label">Biggest Number</div>
-        <div class="limit-grid">
-          <button class="limit-btn active" data-limit="12">12</button>
-          <button class="limit-btn" data-limit="20">20</button>
-          <button class="limit-btn" data-limit="50">50</button>
-          <button class="limit-btn" data-limit="100">100</button>
         </div>
 
         <button id="play-btn" class="play-btn" disabled>🎮 PLAY!</button>
@@ -689,17 +643,34 @@
     // ══════════════════════════════════════════════
     // STATE
     // ══════════════════════════════════════════════
+    // limits per operation for each difficulty
+    // For ÷: maxDivisor = max value of the divisor; maxQuotient = max answer
     const DIFFICULTIES = {
-      easy:      { ops: ['+'],               label: 'Easy' },
-      medium:    { ops: ['+', '-'],           label: 'Medium' },
-      hard:      { ops: ['+', '-', '×'],     label: 'Hard' },
-      psychotic: { ops: ['+', '-', '×', '÷'], label: 'Psychotic' },
+      easy: {
+        label: 'Easy',
+        ops: ['+'],
+        limits: { '+': 10, '-': 10, '×': 10, '÷': { maxDivisor: 10, maxQuotient: 10 } },
+      },
+      medium: {
+        label: 'Medium',
+        ops: ['+', '-'],
+        limits: { '+': 20, '-': 20, '×': 20, '÷': { maxDivisor: 20, maxQuotient: 10 } },
+      },
+      hard: {
+        label: 'Hard',
+        ops: ['+', '-', '×'],
+        limits: { '+': 50, '-': 50, '×': 12, '÷': { maxDivisor: 12, maxQuotient: 10 } },
+      },
+      psychotic: {
+        label: 'Psychotic',
+        ops: ['+', '-', '×', '÷'],
+        limits: { '+': 100, '-': 100, '×': 20, '÷': { maxDivisor: 20, maxQuotient: 10 } },
+      },
     };
 
     let playerName         = '';
     let selectedDifficulty = 'easy';
     let selectedOps        = new Set(DIFFICULTIES.easy.ops);
-    let selectedLimit      = 12;
     let currentQ      = null;   // { display, answer }
     let score         = 0;
     let timeLeft      = 60;
@@ -795,12 +766,12 @@
     // ══════════════════════════════════════════════
     // DIFFICULTY KEY & LEADERBOARD HELPERS
     // ══════════════════════════════════════════════
-    function difficultyKey(diff, limit) {
-      return `mb-scores::${diff}::${limit}`;
+    function difficultyKey(diff) {
+      return `mb-scores::${diff}`;
     }
 
-    function difficultyLabel(diff, limit) {
-      return `${DIFFICULTIES[diff].label}  ·  up to ${limit}`;
+    function difficultyLabel(diff) {
+      return DIFFICULTIES[diff].label;
     }
 
     function getBoard(key) {
@@ -829,8 +800,8 @@
 
     const MEDALS = ['🥇','🥈','🥉','4.','5.'];
 
-    function renderBoard(entries, listEl, subtitleEl, diff, limit) {
-      subtitleEl.textContent = difficultyLabel(diff, limit);
+    function renderBoard(entries, listEl, subtitleEl, diff) {
+      subtitleEl.textContent = difficultyLabel(diff);
       if (!entries.length) {
         listEl.innerHTML = '<div class="lb-empty">No scores yet — be the first! 🌟</div>';
         return;
@@ -844,11 +815,11 @@
     }
 
     function refreshMainBoard() {
-      const key = difficultyKey(selectedDifficulty, selectedLimit);
+      const key = difficultyKey(selectedDifficulty);
       renderBoard(getBoard(key),
         document.getElementById('lb-list'),
         document.getElementById('lb-subtitle'),
-        selectedDifficulty, selectedLimit);
+        selectedDifficulty);
     }
 
     // ══════════════════════════════════════════════
@@ -858,38 +829,40 @@
       return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 
-    function generateQuestion(ops, limit) {
+    function generateQuestion(ops, limits) {
       const op = [...ops][Math.floor(Math.random() * ops.size)];
       let a, b, answer, display;
 
       switch (op) {
-        case '+':
-          a = rnd(1, limit);
-          b = rnd(1, limit);
+        case '+': {
+          const lim = limits['+'];
+          a = rnd(1, lim);  b = rnd(1, lim);
           answer  = a + b;
           display = `${a} + ${b} = ?`;
           break;
-
-        case '-':
+        }
+        case '-': {
+          const lim = limits['-'];
           // Ensure a > b so result is always ≥ 1
-          a = rnd(2, limit);
-          b = rnd(1, a - 1);
+          a = rnd(2, lim);  b = rnd(1, a - 1);
           answer  = a - b;
           display = `${a} − ${b} = ?`;
           break;
-
-        case '×':
-          a = rnd(1, limit);
-          b = rnd(1, limit);
+        }
+        case '×': {
+          const lim = limits['×'];
+          a = rnd(1, lim);
+          // If one factor is 13+, cap the other at 10 (Psychotic rule; no effect when lim ≤ 12)
+          b = (a >= 13) ? rnd(1, 10) : rnd(1, lim);
           answer  = a * b;
           display = `${a} × ${b} = ?`;
           break;
-
+        }
         case '÷': {
-          // Pick divisor then a valid quotient so dividend ≤ limit and result is whole
-          b = rnd(1, limit);
-          const maxK = Math.floor(limit / b);
-          const k    = rnd(1, Math.max(1, maxK));
+          // quotient (answer) is bounded by maxQuotient; divisor by maxDivisor
+          const { maxDivisor, maxQuotient } = limits['÷'];
+          b       = rnd(1, maxDivisor);
+          const k = rnd(1, maxQuotient);
           a       = b * k;
           answer  = k;
           display = `${a} ÷ ${b} = ?`;
@@ -956,7 +929,7 @@
     }
 
     function nextQuestion() {
-      currentQ = generateQuestion(selectedOps, selectedLimit);
+      currentQ = generateQuestion(selectedOps, DIFFICULTIES[selectedDifficulty].limits);
       document.getElementById('question-text').textContent = currentQ.display;
       const inp = document.getElementById('answer-input');
       inp.value = '';
@@ -1005,7 +978,7 @@
       clearInterval(timerID);
       playSound('timeup');
 
-      const key    = difficultyKey(selectedDifficulty, selectedLimit);
+      const key    = difficultyKey(selectedDifficulty);
       const isHigh = isHighScore(score, key);
       const board  = saveEntry(playerName, score, key);
 
@@ -1022,7 +995,7 @@
       renderBoard(board,
         document.getElementById('end-lb-list'),
         document.getElementById('end-lb-subtitle'),
-        selectedDifficulty, selectedLimit);
+        selectedDifficulty);
 
       showScreen('screen-end');
     }
@@ -1061,16 +1034,6 @@
     document.querySelectorAll('.diff-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         applyDifficulty(btn.dataset.diff);
-      });
-    });
-
-    // Number limits
-    document.querySelectorAll('.limit-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.limit-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedLimit = parseInt(btn.dataset.limit, 10);
-        refreshMainBoard();
       });
     });
 
