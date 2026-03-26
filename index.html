@@ -637,8 +637,35 @@
     </div>
   </div>
 
-  <script>
+  <script type="module">
     'use strict';
+
+    // ══════════════════════════════════════════════
+    // FIREBASE
+    // ══════════════════════════════════════════════
+    import { initializeApp }
+      from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+    import {
+      getFirestore, collection, addDoc, query,
+      orderBy, limit, onSnapshot, getDocs, serverTimestamp
+    } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+
+    const _app = initializeApp({
+      apiKey:            "AIzaSyB10EhGfgrG7FqcBCUBz8e1AZJeWAg_a70",
+      authDomain:        "kids-math-game-a6bc7.firebaseapp.com",
+      projectId:         "kids-math-game-a6bc7",
+      storageBucket:     "kids-math-game-a6bc7.firebasestorage.app",
+      messagingSenderId: "974320227995",
+      appId:             "1:974320227995:web:2e0f7d2612ec042fa3183e"
+    });
+    const db = getFirestore(_app);
+
+    function scoresRef(diff) {
+      return collection(db, 'leaderboards', diff, 'scores');
+    }
+    function boardQuery(diff) {
+      return query(scoresRef(diff), orderBy('score', 'desc'), limit(5));
+    }
 
     // ══════════════════════════════════════════════
     // STATE
@@ -764,34 +791,42 @@
     }
 
     // ══════════════════════════════════════════════
-    // DIFFICULTY KEY & LEADERBOARD HELPERS
+    // LEADERBOARD HELPERS  (Firestore)
     // ══════════════════════════════════════════════
-    function difficultyKey(diff) {
-      return `mb-scores::${diff}`;
-    }
-
     function difficultyLabel(diff) {
       return DIFFICULTIES[diff].label;
     }
 
-    function getBoard(key) {
-      try { return JSON.parse(localStorage.getItem(key)) || []; }
-      catch (_) { return []; }
+    async function saveEntry(name, sc, diff) {
+      await addDoc(scoresRef(diff), { name, score: sc, createdAt: serverTimestamp() });
+      const snap = await getDocs(boardQuery(diff));
+      return snap.docs.map(d => ({ name: d.data().name, score: d.data().score }));
     }
 
-    function saveEntry(name, sc, key) {
-      let entries = getBoard(key);
-      entries.push({ name, score: sc });
-      entries.sort((a, b) => b.score - a.score);
-      entries = entries.slice(0, 5);
-      try { localStorage.setItem(key, JSON.stringify(entries)); } catch (_) {}
-      return entries;
-    }
-
-    function isHighScore(sc, key) {
+    async function isHighScore(sc, diff) {
       if (sc <= 0) return false;
-      const entries = getBoard(key);
+      const snap = await getDocs(boardQuery(diff));
+      const entries = snap.docs.map(d => d.data());
       return entries.length < 5 || sc > entries[entries.length - 1].score;
+    }
+
+    // Real-time listener for the main screen leaderboard
+    let unsubMainBoard = null;
+
+    function listenMainBoard(diff) {
+      if (unsubMainBoard) { unsubMainBoard(); unsubMainBoard = null; }
+      const listEl     = document.getElementById('lb-list');
+      const subtitleEl = document.getElementById('lb-subtitle');
+      subtitleEl.textContent = difficultyLabel(diff);
+      listEl.innerHTML = '<div class="lb-empty">Loading… ⏳</div>';
+      unsubMainBoard = onSnapshot(
+        boardQuery(diff),
+        snap => {
+          const entries = snap.docs.map(d => ({ name: d.data().name, score: d.data().score }));
+          renderBoard(entries, listEl, subtitleEl, diff);
+        },
+        () => { listEl.innerHTML = '<div class="lb-empty">Could not load scores 😕</div>'; }
+      );
     }
 
     function html(str) {
@@ -974,15 +1009,15 @@
     // ══════════════════════════════════════════════
     // END GAME
     // ══════════════════════════════════════════════
-    function endGame() {
+    async function endGame() {
       clearInterval(timerID);
       playSound('timeup');
 
-      const key    = difficultyKey(selectedDifficulty);
-      const isHigh = isHighScore(score, key);
-      const board  = saveEntry(playerName, score, key);
+      const diff   = selectedDifficulty;
+      const isHigh = await isHighScore(score, diff);
+      const board  = await saveEntry(playerName, score, diff);
 
-      document.getElementById('end-subtitle').textContent    = `Great job, ${playerName}!`;
+      document.getElementById('end-subtitle').textContent      = `Great job, ${playerName}!`;
       document.getElementById('final-score-value').textContent = score;
 
       const badge = document.getElementById('new-high-badge');
@@ -995,7 +1030,7 @@
       renderBoard(board,
         document.getElementById('end-lb-list'),
         document.getElementById('end-lb-subtitle'),
-        selectedDifficulty);
+        diff);
 
       showScreen('screen-end');
     }
@@ -1028,7 +1063,7 @@
       document.querySelectorAll('.op-btn').forEach(b => {
         b.classList.toggle('active', selectedOps.has(b.dataset.op));
       });
-      refreshMainBoard();
+      listenMainBoard(diff);
     }
 
     document.querySelectorAll('.diff-btn').forEach(btn => {
@@ -1052,13 +1087,13 @@
     document.getElementById('btn-again').addEventListener('click', startCountdown);
     document.getElementById('btn-settings').addEventListener('click', () => {
       showScreen('screen-main');
-      refreshMainBoard();
+      listenMainBoard(selectedDifficulty);
     });
 
     // ══════════════════════════════════════════════
     // INIT
     // ══════════════════════════════════════════════
-    refreshMainBoard();
+    applyDifficulty(selectedDifficulty);  // highlights ops + starts real-time board listener
     syncPlayBtn();
   </script>
 </body>
