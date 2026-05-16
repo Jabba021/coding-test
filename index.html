@@ -431,6 +431,97 @@
     }
     .input-hint { font-size: 0.78rem; color: #d1d5db; font-weight: 700; }
 
+    /* Input-method toggle (settings card) — mirrors .diff-btn shape */
+    .input-mode-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+      margin-bottom: 1.6rem;
+    }
+    .input-mode-btn {
+      padding: 0.65rem 0.4rem;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 800;
+      border: 3px solid #e5e7eb;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+      background: #f3f4f6;
+      color: #6b7280;
+      line-height: 1.3;
+    }
+    .input-mode-btn:hover { transform: scale(1.04); border-color: #d1d5db; }
+    .input-mode-btn.active {
+      color: #fff;
+      transform: scale(1.05);
+      box-shadow: 0 5px 16px rgba(0,0,0,0.25);
+      border-color: transparent;
+      background: linear-gradient(135deg, #7c3aed, #4338ca);
+    }
+
+    /* Keypad (game screen) */
+    #keypad { display: none; }
+    body.keypad-mode #keypad { display: grid; }
+    body.keypad-mode #answer-input { display: none; }
+    body.keypad-mode .input-hint { display: none; }
+    body.keypad-mode #answer-display { display: block; }
+
+    #keypad {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.55rem;
+      margin-top: 0.4rem;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    .kp-btn {
+      min-height: 56px;
+      padding: 0.9rem 0;
+      font-family: inherit;
+      font-size: 1.6rem;
+      font-weight: 900;
+      border: 3px solid #e5e7eb;
+      border-radius: 16px;
+      background: #fafafa;
+      color: #111827;
+      cursor: pointer;
+      transition: transform 0.08s, background 0.12s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .kp-btn:active { transform: scale(0.94); background: #ede9fe; }
+    .kp-btn.kp-back {
+      background: linear-gradient(135deg, #e5e7eb, #9ca3af);
+      color: #1f2937;
+      border-color: transparent;
+    }
+    .kp-btn.kp-submit {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 5px 16px rgba(34,197,94,0.35);
+    }
+    .kp-btn.kp-back:active   { background: linear-gradient(135deg, #d1d5db, #6b7280); }
+    .kp-btn.kp-submit:active { background: linear-gradient(135deg, #16a34a, #15803d); }
+
+    /* Answer display shown in place of the hidden input when keypad mode is on */
+    #answer-display {
+      display: none;
+      width: 100%;
+      padding: 1rem;
+      font-size: 2rem;
+      font-weight: 800;
+      text-align: center;
+      border: 3px solid #ede9fe;
+      border-radius: 18px;
+      color: #111827;
+      background: #fafafa;
+      margin-bottom: 0.55rem;
+      min-height: 4rem;
+      letter-spacing: 0.08em;
+    }
+    #answer-display.empty { color: #d1d5db; }
+
     /* ════════════════════════════════════════
        END SCREEN
     ════════════════════════════════════════ */
@@ -568,6 +659,12 @@
           </button>
         </div>
 
+        <div class="section-label">Input Method</div>
+        <div class="input-mode-grid">
+          <button class="input-mode-btn" data-mode="keyboard">⌨️ Keyboard</button>
+          <button class="input-mode-btn" data-mode="keypad">🔢 Keypad</button>
+        </div>
+
         <button id="play-btn" class="play-btn" disabled>🎮 PLAY!</button>
       </div>
 
@@ -607,6 +704,21 @@
 
       <input id="answer-input" type="number" step="1"
              placeholder="?" autocomplete="off">
+      <div id="answer-display" class="empty">?</div>
+      <div id="keypad">
+        <button type="button" class="kp-btn" data-digit="1">1</button>
+        <button type="button" class="kp-btn" data-digit="2">2</button>
+        <button type="button" class="kp-btn" data-digit="3">3</button>
+        <button type="button" class="kp-btn" data-digit="4">4</button>
+        <button type="button" class="kp-btn" data-digit="5">5</button>
+        <button type="button" class="kp-btn" data-digit="6">6</button>
+        <button type="button" class="kp-btn" data-digit="7">7</button>
+        <button type="button" class="kp-btn" data-digit="8">8</button>
+        <button type="button" class="kp-btn" data-digit="9">9</button>
+        <button type="button" class="kp-btn kp-back"   data-action="back">⌫</button>
+        <button type="button" class="kp-btn"           data-digit="0">0</button>
+        <button type="button" class="kp-btn kp-submit" data-action="submit">✓</button>
+      </div>
       <div class="input-hint">Type your answer and press Enter ↵</div>
     </div>
   </div>
@@ -703,6 +815,21 @@
     let timeLeft      = 60;
     let timerID       = null;
     let audioCtx      = null;
+
+    const KEYPAD_STORAGE_KEY = 'mb_keypad_enabled';
+    const MAX_ANSWER_DIGITS  = 4;
+    let keypadEnabled = false;
+
+    function detectKeypadDefault() {
+      try {
+        const stored = localStorage.getItem(KEYPAD_STORAGE_KEY);
+        if (stored === '1') return true;
+        if (stored === '0') return false;
+      } catch (_) {}
+      return ('ontouchstart' in window) ||
+             (navigator.maxTouchPoints > 0) ||
+             window.matchMedia('(max-width: 620px)').matches;
+    }
 
     // ══════════════════════════════════════════════
     // AUDIO  (Web Audio API – no files needed)
@@ -944,7 +1071,7 @@
       showScreen('screen-game');
       tickTimer();
       nextQuestion();
-      document.getElementById('answer-input').focus();
+      if (!keypadEnabled) document.getElementById('answer-input').focus();
 
       clearInterval(timerID);
       timerID = setInterval(() => {
@@ -968,10 +1095,11 @@
       document.getElementById('question-text').textContent = currentQ.display;
       const inp = document.getElementById('answer-input');
       inp.value = '';
+      refreshAnswerDisplay();
       // Remove feedback classes without re-triggering animation
       const qa = document.getElementById('question-area');
       qa.classList.remove('correct', 'wrong');
-      inp.focus();
+      if (!keypadEnabled) inp.focus();
     }
 
     function triggerFeedback(cls) {
@@ -979,6 +1107,38 @@
       qa.classList.remove('correct', 'wrong');
       void qa.offsetWidth;
       qa.classList.add(cls);
+    }
+
+    function applyInputMode(enabled) {
+      keypadEnabled = !!enabled;
+      document.body.classList.toggle('keypad-mode', keypadEnabled);
+      document.querySelectorAll('.input-mode-btn').forEach(b => {
+        b.classList.toggle('active', (b.dataset.mode === 'keypad') === keypadEnabled);
+      });
+      try { localStorage.setItem(KEYPAD_STORAGE_KEY, keypadEnabled ? '1' : '0'); } catch (_) {}
+      refreshAnswerDisplay();
+    }
+
+    function refreshAnswerDisplay() {
+      const disp = document.getElementById('answer-display');
+      if (!disp) return;
+      const v = document.getElementById('answer-input').value;
+      if (v === '') { disp.textContent = '?'; disp.classList.add('empty'); }
+      else          { disp.textContent = v;   disp.classList.remove('empty'); }
+    }
+
+    function keypadAppend(digit) {
+      const inp = document.getElementById('answer-input');
+      if (inp.value.length >= MAX_ANSWER_DIGITS) return;
+      if (inp.value === '' && digit === '0') return;
+      inp.value = inp.value + digit;
+      refreshAnswerDisplay();
+    }
+
+    function keypadBackspace() {
+      const inp = document.getElementById('answer-input');
+      inp.value = inp.value.slice(0, -1);
+      refreshAnswerDisplay();
     }
 
     function checkAnswer() {
@@ -1002,7 +1162,8 @@
         triggerFeedback('wrong');
         playSound('wrong');
         inp.value = '';
-        inp.focus();
+        refreshAnswerDisplay();
+        if (!keypadEnabled) inp.focus();
       }
     }
 
@@ -1072,6 +1233,20 @@
       });
     });
 
+    // Input-method toggle
+    document.querySelectorAll('.input-mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => applyInputMode(btn.dataset.mode === 'keypad'));
+    });
+
+    // Keypad (delegated)
+    document.getElementById('keypad').addEventListener('click', e => {
+      const btn = e.target.closest('.kp-btn');
+      if (!btn) return;
+      if (btn.dataset.digit !== undefined)      keypadAppend(btn.dataset.digit);
+      else if (btn.dataset.action === 'back')   keypadBackspace();
+      else if (btn.dataset.action === 'submit') checkAnswer();
+    });
+
     // Play
     document.getElementById('play-btn').addEventListener('click', () => {
       playerName = document.getElementById('name-input').value.trim();
@@ -1095,6 +1270,7 @@
     // ══════════════════════════════════════════════
     applyDifficulty(selectedDifficulty);  // highlights ops + starts real-time board listener
     syncPlayBtn();
+    applyInputMode(detectKeypadDefault());
   </script>
 </body>
 </html>
