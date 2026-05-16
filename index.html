@@ -619,9 +619,99 @@
       transition: all 0.2s;
     }
     .btn-settings:hover { border-color: #7c3aed; color: #7c3aed; background: #faf5ff; }
+
+    /* ════════════════════════════════════════
+       ON FIRE! MODE  (streak ≥ 10)
+    ════════════════════════════════════════ */
+    body.on-fire::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 5;
+      background:
+        radial-gradient(ellipse at top,    transparent 45%, rgba(239, 68, 68, 0.22) 100%),
+        radial-gradient(ellipse at bottom, transparent 45%, rgba(249, 115, 22, 0.28) 100%);
+      animation: edgeFlicker 0.42s ease-in-out infinite alternate;
+    }
+    @keyframes edgeFlicker {
+      from { opacity: 0.65; }
+      to   { opacity: 1;    }
+    }
+
+    body.on-fire #question-area {
+      position: relative;
+      background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fed7aa 100%);
+      border-color: #f97316;
+      animation: fireFlicker 0.45s ease-in-out infinite alternate;
+    }
+    @keyframes fireFlicker {
+      0%   { box-shadow: 0 0 22px rgba(249,115,22,0.55), inset 0 0 14px rgba(239,68,68,0.12); }
+      50%  { box-shadow: 0 0 46px rgba(239,68,68,0.85),  inset 0 0 26px rgba(249,115,22,0.25); }
+      100% { box-shadow: 0 0 34px rgba(252,211,77,0.7),  inset 0 0 20px rgba(239,68,68,0.18); }
+    }
+    body.on-fire #question-area::before,
+    body.on-fire #question-area::after {
+      content: '🔥';
+      position: absolute;
+      font-size: 2.4rem;
+      pointer-events: none;
+      animation: flameDance 0.4s ease-in-out infinite alternate;
+      filter: drop-shadow(0 0 8px rgba(249,115,22,0.7));
+    }
+    body.on-fire #question-area::before { left: -14px;  top: -22px; }
+    body.on-fire #question-area::after  { right: -14px; top: -22px; animation-delay: 0.2s; }
+    @keyframes flameDance {
+      from { transform: translateY(0)    rotate(-10deg) scale(1);    }
+      to   { transform: translateY(-8px) rotate(10deg)  scale(1.18); }
+    }
+
+    body.on-fire #score-value {
+      background: linear-gradient(135deg, #f97316, #dc2626, #fbbf24);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: scoreFlame 0.5s ease-in-out infinite alternate;
+    }
+    @keyframes scoreFlame {
+      from { filter: drop-shadow(0 0 6px  rgba(249,115,22,0.7)); }
+      to   { filter: drop-shadow(0 0 14px rgba(239,68,68,0.95)); }
+    }
+
+    /* "ON FIRE!" pop banner shown the moment streak hits 10 */
+    #fire-badge {
+      position: fixed;
+      top: 38%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      font-size: 4.5rem;
+      font-weight: 900;
+      letter-spacing: 3px;
+      background: linear-gradient(135deg, #fbbf24 0%, #f97316 50%, #ef4444 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 24px rgba(239,68,68,0.85));
+      z-index: 200;
+      pointer-events: none;
+      opacity: 0;
+      white-space: nowrap;
+    }
+    @media (max-width: 480px) { #fire-badge { font-size: 2.6rem; letter-spacing: 2px; } }
+    #fire-badge.show { animation: fireBadgePop 1.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+    @keyframes fireBadgePop {
+      0%   { transform: translate(-50%, -50%) scale(0)    rotate(-15deg); opacity: 0; }
+      18%  { transform: translate(-50%, -50%) scale(1.35) rotate(6deg);   opacity: 1; }
+      32%  { transform: translate(-50%, -50%) scale(1)    rotate(0);      opacity: 1; }
+      82%  { transform: translate(-50%, -50%) scale(1)    rotate(0);      opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1.5)  rotate(0);      opacity: 0; }
+    }
   </style>
 </head>
 <body>
+
+  <!-- "ON FIRE!" pop banner (streak ≥ 10) -->
+  <div id="fire-badge">🔥 ON FIRE! 🔥</div>
 
   <!-- ═══════════════════ MAIN SCREEN ═══════════════════ -->
   <div id="screen-main" class="screen active">
@@ -812,9 +902,17 @@
     let selectedOps        = new Set(DIFFICULTIES.easy.ops);
     let currentQ      = null;   // { display, answer }
     let score         = 0;
+    let streak        = 0;
     let timeLeft      = 60;
     let timerID       = null;
     let audioCtx      = null;
+
+    // Points awarded for the Nth correct answer in a row: 1,2,2,3,3,3,4,4,4,5,
+    // then 5 from the 10th onward.
+    const STREAK_POINTS = [0, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5];
+    function pointsForStreak(s) {
+      return STREAK_POINTS[Math.min(s, STREAK_POINTS.length - 1)];
+    }
 
     const KEYPAD_STORAGE_KEY = 'mb_keypad_enabled';
     const MAX_ANSWER_DIGITS  = 4;
@@ -867,15 +965,6 @@
           tone(880,  0,    0.08);
           tone(1100, 0.09, 0.22);
           break;
-        case 'correct':
-          tone(523, 0,    0.09);
-          tone(659, 0.09, 0.09);
-          tone(784, 0.18, 0.2);
-          break;
-        case 'wrong':
-          tone(220, 0,    0.08, 0.28, 'sawtooth');
-          tone(170, 0.09, 0.18, 0.22, 'sawtooth');
-          break;
         case 'timeup':
           tone(523, 0,    0.14);
           tone(415, 0.15, 0.14);
@@ -885,6 +974,174 @@
           [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.12, 0.16));
           break;
       }
+    }
+
+    // ── Filtered noise burst (used by fart sounds) ─────────────
+    function noiseBurst(start, dur, vol, lpfFreq) {
+      try {
+        const c = ctx();
+        const buf = c.createBuffer(1, Math.ceil(c.sampleRate * dur), c.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+        const src  = c.createBufferSource();
+        src.buffer = buf;
+        const lpf  = c.createBiquadFilter();
+        lpf.type = 'lowpass';
+        lpf.frequency.value = lpfFreq;
+        const gain = c.createGain();
+        const t0 = c.currentTime + start;
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        src.connect(lpf).connect(gain).connect(c.destination);
+        src.start(t0);
+        src.stop(t0 + dur + 0.02);
+      } catch (_) {}
+    }
+
+    // ── Celebration fanfare — escalates with the streak tier ─────────
+    // tier 1 = 1st correct, 2 = 2nd–3rd, 3 = 4th–6th, 4 = 7th–9th, 5 = 10th+
+    function celebrate(tier) {
+      if (tier <= 1) {
+        // Plain ding (C-E-G arpeggio)
+        tone(523, 0,    0.09);
+        tone(659, 0.09, 0.09);
+        tone(784, 0.18, 0.20);
+      } else if (tier === 2) {
+        // Arpeggio + a little high sparkle
+        tone(523, 0,    0.08);
+        tone(659, 0.08, 0.08);
+        tone(784, 0.16, 0.12);
+        tone(1047, 0.28, 0.18, 0.32, 'triangle');
+      } else if (tier === 3) {
+        // Longer ascending sparkle + sustained chord
+        tone(523, 0,    0.08);
+        tone(659, 0.08, 0.08);
+        tone(784, 0.16, 0.08);
+        tone(1047, 0.24, 0.10, 0.32, 'triangle');
+        tone(1319, 0.34, 0.22, 0.34, 'triangle');
+        tone(523,  0.24, 0.34, 0.18);
+        tone(784,  0.24, 0.34, 0.18);
+      } else if (tier === 4) {
+        // Brassy fanfare
+        tone(523,  0,    0.10, 0.30, 'sawtooth');
+        tone(659,  0.10, 0.10, 0.30, 'sawtooth');
+        tone(784,  0.20, 0.10, 0.30, 'sawtooth');
+        tone(1047, 0.30, 0.18, 0.32, 'sawtooth');
+        tone(1319, 0.50, 0.24, 0.32, 'triangle');
+        tone(784,  0.30, 0.40, 0.20);
+      } else {
+        // Tier 5+: epic — brass fanfare + bell sparkle + sustained chord.
+        // Volumes are noticeably louder than tiers 1–4 so the ON FIRE
+        // moment really lands alongside the "You're on fire!" voice.
+        [523, 659, 784, 1047, 1319].forEach((f, i) => {
+          tone(f, i * 0.07, 0.12, 0.55, 'sawtooth');
+        });
+        [1047, 1319, 1568, 2093].forEach((f, i) => {
+          tone(f, 0.42 + i * 0.08, 0.26, 0.50, 'triangle');
+        });
+        tone(523,  0.42, 0.65, 0.32);
+        tone(784,  0.42, 0.65, 0.32);
+        tone(1047, 0.42, 0.65, 0.28);
+        // Low brass punch for extra weight
+        tone(262, 0, 0.35, 0.40, 'sawtooth');
+      }
+    }
+
+    // ── Fart / "lost streak" noise — escalates with the streak you JUST lost ──
+    // tier 0 = no streak (was already wrong), 1 = streak 1–3, 2 = 4–6, 3 = 7–9, 4 = 10+
+    function fartSound(tier) {
+      try {
+        const cfg = [
+          { dur: 0.22, f0: 110, f1: 88, vol: 0.32, noise: 0.14, wob: 9,  lpf: 800 }, // 0
+          { dur: 0.34, f0: 95,  f1: 68, vol: 0.42, noise: 0.22, wob: 14, lpf: 700 }, // 1
+          { dur: 0.50, f0: 85,  f1: 52, vol: 0.52, noise: 0.32, wob: 22, lpf: 620 }, // 2
+          { dur: 0.75, f0: 75,  f1: 42, vol: 0.60, noise: 0.40, wob: 32, lpf: 560 }, // 3
+          { dur: 1.05, f0: 65,  f1: 36, vol: 0.70, noise: 0.50, wob: 48, lpf: 500 }, // 4
+        ][Math.min(Math.max(tier, 0), 4)];
+
+        const c  = ctx();
+        const t0 = c.currentTime;
+
+        // Pitched buzz (sawtooth, sliding down) + LFO wobble for the "flutter"
+        const osc  = c.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(cfg.f0, t0);
+        osc.frequency.linearRampToValueAtTime(cfg.f1, t0 + cfg.dur);
+
+        const lfo     = c.createOscillator();
+        const lfoGain = c.createGain();
+        lfo.frequency.value = cfg.wob;
+        lfoGain.gain.value  = cfg.f0 * 0.28;
+        lfo.connect(lfoGain).connect(osc.frequency);
+
+        const lpf = c.createBiquadFilter();
+        lpf.type = 'lowpass';
+        lpf.frequency.value = cfg.lpf;
+
+        const gain = c.createGain();
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(cfg.vol, t0 + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + cfg.dur);
+
+        osc.connect(lpf).connect(gain).connect(c.destination);
+        osc.start(t0);  osc.stop(t0 + cfg.dur + 0.05);
+        lfo.start(t0);  lfo.stop(t0 + cfg.dur + 0.05);
+
+        // Wet noise layer (the splatter)
+        if (cfg.noise > 0) noiseBurst(0, cfg.dur, cfg.noise, cfg.lpf * 0.7);
+
+        // Tier 4 finisher: a sad descending plop tail
+        if (tier >= 4) {
+          tone(120, cfg.dur,        0.22, 0.45, 'square');
+          tone(80,  cfg.dur + 0.20, 0.32, 0.45, 'square');
+          noiseBurst(cfg.dur + 0.05, 0.35, 0.38, 380);
+        }
+      } catch (_) {}
+    }
+
+    // ── "YOU'RE ON FIRE!" voice clip ───────────────────────────
+    // Speech synth volume already maxes at 1.0, so the on-fire fanfare
+    // below is also boosted to make the whole moment feel bigger.
+    // To use a real recorded clip, drop "on-fire.mp3" next to index.html
+    // and replace this function body with:
+    //     try { new Audio('on-fire.mp3').play().catch(() => {}); } catch (_) {}
+    function sayOnFire() {
+      try {
+        if (!('speechSynthesis' in window)) return;
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance("You're on fire!");
+        u.rate   = 1.0;
+        u.pitch  = 0.9;
+        u.volume = 1.0;
+        speechSynthesis.speak(u);
+      } catch (_) {}
+    }
+
+    // ── Streak → tier mapping (matches the scoring tiers) ─────
+    function celebrationTier(streakNow) {
+      if (streakNow >= 10) return 5;
+      if (streakNow >= 7)  return 4;
+      if (streakNow >= 4)  return 3;
+      if (streakNow >= 2)  return 2;
+      return 1;
+    }
+    function fartTier(streakLost) {
+      if (streakLost >= 10) return 4;
+      if (streakLost >= 7)  return 3;
+      if (streakLost >= 4)  return 2;
+      if (streakLost >= 1)  return 1;
+      return 0;
+    }
+
+    function showFireBadge() {
+      const el = document.getElementById('fire-badge');
+      el.classList.remove('show');
+      void el.offsetWidth;  // restart animation
+      el.classList.add('show');
+    }
+    function setFireMode(on) {
+      document.body.classList.toggle('on-fire', !!on);
     }
 
     // ══════════════════════════════════════════════
@@ -1066,7 +1323,9 @@
     // ══════════════════════════════════════════════
     function startGame() {
       score    = 0;
+      streak   = 0;
       timeLeft = 30;
+      setFireMode(false);
       document.getElementById('score-value').textContent = '0';
       showScreen('screen-game');
       tickTimer();
@@ -1149,18 +1408,28 @@
       if (isNaN(val)) { inp.value = ''; return; }
 
       if (val === currentQ.answer) {
-        score++;
+        streak++;
+        score += pointsForStreak(streak);
         const sv = document.getElementById('score-value');
         sv.textContent = score;
         sv.classList.remove('pop');
         void sv.offsetWidth;
         sv.classList.add('pop');
         triggerFeedback('correct');
-        playSound('correct');
+        celebrate(celebrationTier(streak));
+        if (streak === 10) {
+          // First time crossing into ON FIRE this run
+          setFireMode(true);
+          showFireBadge();
+          sayOnFire();
+        }
         nextQuestion();
       } else {
+        const lost = streak;
+        streak = 0;
+        setFireMode(false);
         triggerFeedback('wrong');
-        playSound('wrong');
+        fartSound(fartTier(lost));
         inp.value = '';
         refreshAnswerDisplay();
         if (!keypadEnabled) inp.focus();
@@ -1172,6 +1441,8 @@
     // ══════════════════════════════════════════════
     async function endGame() {
       clearInterval(timerID);
+      setFireMode(false);
+      try { speechSynthesis.cancel(); } catch (_) {}
       playSound('timeup');
 
       const diff   = selectedDifficulty;
